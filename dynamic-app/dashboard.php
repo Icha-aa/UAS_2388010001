@@ -4,6 +4,15 @@ require_once 'src/db.php';
 require_once 'src/helpers.php';
 urusLogin();
 
+// ✅ FIX: Logika hapus dipindah ke ATAS sebelum output HTML
+// agar header redirect bisa berjalan tanpa error "headers already sent"
+if (isset($_GET['delete'])) {
+    $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
+    $stmt->execute([$_GET['delete']]);
+    header("Location: dashboard.php");
+    exit;
+}
+
 $products = $pdo->query("SELECT * FROM products ORDER BY id DESC")->fetchAll();
 ?>
 <!DOCTYPE html>
@@ -55,11 +64,3 @@ $products = $pdo->query("SELECT * FROM products ORDER BY id DESC")->fetchAll();
 </div>
 </body>
 </html>
-<?php
-// Fitur Hapus Langsung
-if (isset($_GET['delete'])) {
-    $stmt = $pdo->prepare("DELETE FROM products WHERE id = ?");
-    $stmt->execute([$_GET['delete']]);
-    header("Location: dashboard.php");
-}
-?>

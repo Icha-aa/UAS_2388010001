@@ -2,17 +2,53 @@ name: Deploy Dynamic App
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
+    paths:
+      - "dynamic-app/**"
+      - "docker-compose.yml"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Build and Push Docker Image
-        run: |
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "sitimalikha19" --password-stdin
-          docker build -t sitimalikha19/kerudung-app:latest -f Dockerfile.txt .
-          docker push sitimalikha19/kerudung-app:latest
+      - name: Login ke Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push image dinamis
+        uses: docker/build-push-action@v5
+        with:
+          context: ./dynamic-app
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/kerudung-dinamis:latest
+
+      - name: Copy docker-compose & SQL ke EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "docker-compose.yml,database/uas_db.sql"
+          target: "/home/ubuntu/UAS_project/"
+
+      - name: Deploy ke AWS EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/UAS_project/database/
+            chmod 644 /home/ubuntu/UAS_project/database/uas_db.sql
+            cd /home/ubuntu/UAS_project
+            docker compose pull container-dinamis
+            docker compose stop container-dinamis db-webdinamis nginx-dinamis
+            docker compose rm -f container-dinamis db-webdinamis nginx-dinamis
+            docker volume rm uas_project_db_data || true
+            docker compose up -d db-webdinamis container-dinamis nginx-dinamis
+            echo "[dinamis] deployed at $(date)"
